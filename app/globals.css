@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+html, body { height: 100%; }
+body {
+  @apply bg-paper text-ink antialiased;
+  font-feature-settings: 'ss01', 'cv11';
+}
+
+.card {
+  @apply rounded-2xl border border-black/[0.07] bg-white shadow-card;
+}
+
+/* Buttons: specific properties only, custom ease, instant press feedback. */
+.btn {
+  @apply inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-medium;
+  transition:
+    transform 160ms var(--ease-out),
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+  will-change: transform;
+}
+.btn:active {
+  transform: scale(0.97);
+}
+.btn:focus-visible {
+  outline: 2px solid theme('colors.accent');
+  outline-offset: 2px;
+}
+.btn:disabled {
+  @apply cursor-not-allowed opacity-50;
+  transform: none;
+}
+
+.btn-primary { @apply btn bg-ink text-white; }
+.btn-secondary { @apply btn bg-white border border-black/10 text-ink; }
+.btn-danger { @apply btn bg-bad text-white; }
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover { @apply bg-black; }
+  .btn-secondary:hover { @apply bg-black/[0.04]; }
+  .btn-danger:hover { background-color: #be123c; }
+}
+
+.input {
+  @apply w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.input:focus {
+  @apply outline-none border-accent;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
+}
+
+/* Range slider — accent-tinted track + thumb. */
+.range-accent {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(17, 24, 39, 0.10);
+  outline: none;
+  transition: background-color 160ms ease;
+}
+.range-accent::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: theme('colors.accent');
+  border: 2px solid white;
+  box-shadow: 0 1px 2px rgba(11, 13, 18, 0.18), 0 0 0 1px rgba(124, 58, 237, 0.25);
+  cursor: grab;
+  transition: transform 120ms var(--ease-out), box-shadow 160ms ease;
+}
+.range-accent::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.1);
+}
+.range-accent::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: theme('colors.accent');
+  border: 2px solid white;
+  box-shadow: 0 1px 2px rgba(11, 13, 18, 0.18), 0 0 0 1px rgba(124, 58, 237, 0.25);
+  cursor: grab;
+}
+.range-accent:focus-visible {
+  background: rgba(124, 58, 237, 0.18);
+}
+
+/* Pill toggle for boolean preferences. */
+.toggle-pill {
+  @apply inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors;
+  border-color: rgba(17, 24, 39, 0.10);
+  background-color: white;
+  transition-timing-function: var(--ease-out);
+}
+.toggle-pill[data-on="true"] {
+  background-color: theme('colors.accent');
+  border-color: theme('colors.accent');
+  color: white;
+}
+@media (hover: hover) and (pointer: fine) {
+  .toggle-pill:not([data-on="true"]):hover {
+    background-color: rgba(17, 24, 39, 0.04);
+  }
+}
