@@ -1,6 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { GoogleDriveCard } from '@/components/GoogleDriveCard';
+import { TemplateCard } from '@/components/TemplateCard';
+import { JobSourcesCard } from '@/components/JobSourcesCard';
+import { useJobRefresh, JobRefreshProgress } from '@/components/JobRefresh';
 
 interface Totals {
   jobs_in_pool: number;
@@ -32,8 +36,6 @@ interface Stats {
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshSummary, setRefreshSummary] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadStats = useCallback(async () => {
@@ -54,25 +56,9 @@ export default function DashboardPage() {
     loadStats();
   }, [loadStats]);
 
-  const refreshJobs = useCallback(async () => {
-    setRefreshing(true);
-    setRefreshSummary(null);
-    setError(null);
-    try {
-      const res = await fetch('/api/jobs/refresh', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-      const parts = Object.entries(data.summary || {}).map(
-        ([k, v]: [string, any]) => `${k}: ${v.fetched} fetched, ${v.scored} scored, ${v.errors} err`
-      );
-      setRefreshSummary(parts.join(' · ') || 'No sources ran');
-      await loadStats();
-    } catch (e: any) {
-      setError(e.message || String(e));
-    } finally {
-      setRefreshing(false);
-    }
-  }, [loadStats]);
+  // Reload stats once the refresh stream finishes so the pool/activity KPIs update.
+  const { state: refreshState, start: refreshJobs, minimize, expand, dismiss } = useJobRefresh(loadStats);
+  const refreshing = refreshState.phase === 'running';
 
   return (
     <div className="space-y-8">
@@ -97,11 +83,14 @@ export default function DashboardPage() {
           {error}
         </div>
       )}
-      {refreshSummary && (
-        <div className="rounded-xl border border-ok/20 bg-ok/5 px-4 py-3 text-sm text-ok">
-          Refresh complete — {refreshSummary}
-        </div>
-      )}
+
+      <JobRefreshProgress state={refreshState} minimize={minimize} expand={expand} dismiss={dismiss} />
+
+      <GoogleDriveCard />
+
+      <TemplateCard />
+
+      <JobSourcesCard />
 
       {stats && (
         <>

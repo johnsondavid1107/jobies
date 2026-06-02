@@ -33,7 +33,7 @@ export async function getSwipeQueue(limit = 50): Promise<QueueJob[]> {
   const { data, error } = await query;
   if (error) throw error;
   const rows = (data || [])
-    .filter((j: any) => isLocationEligible(j.remote_type, j.location))
+    .filter((j: any) => isLocationEligible(j.remote_type, j.location, j.description))
     .map((j: any) => {
     const score = Array.isArray(j.job_scores) ? j.job_scores[0] : j.job_scores;
     return {
@@ -58,27 +58,36 @@ export async function getSwipeQueue(limit = 50): Promise<QueueJob[]> {
   return rows;
 }
 
-// Hard rule: remote, NYC, or NJ only. Multi-location strings pass if ANY segment matches.
-const ELIGIBLE_PATTERNS: RegExp[] = [
-  /\bremote\b/i,
-  /\bworldwide\b/i,
-  /\banywhere\b/i,
-  /\bnew york\b/i,
-  /\bnyc\b/i,
-  /\bmanhattan\b/i,
-  /\bbrooklyn\b/i,
-  /\bqueens\b/i,
-  /\bbronx\b/i,
-  /\bstaten island\b/i,
-  /\bnew jersey\b/i,
-  /\bnj\b/i,
-  /\bjersey city\b/i,
-  /\bnewark\b/i,
-  /\bhoboken\b/i,
-];
+// Eligibility model: country-level US + remote (location OR description) pass.
+// Empty/ambiguous locations pass — user can Skip in the deck. Drop only when the
+// location clearly names a non-US country/region AND nothing signals US or remote.
+const REMOTE_TOKENS = /\b(remote|worldwide|anywhere|work from home|wfh|distributed team)\b/i;
 
-export function isLocationEligible(remoteType: string | null, location: string | null): boolean {
+const US_LOCATION_TOKENS = /\b(united states|u\.s\.a\.?|u\.s\.|usa|us|north america|americas|nyc|new york|manhattan|brooklyn|queens|bronx|staten island|new jersey|jersey city|newark|hoboken|ny|nj)\b/i;
+
+// Description-only remote signal: looks for "remote" with a US-friendly qualifier
+// nearby so we don't accept "remote, EU only" as eligible. Falls back to a generic
+// "fully remote" / "100% remote" which usually means open globally.
+const REMOTE_IN_DESCRIPTION = /\b(remote (within|in|across|throughout)?\s*(the\s*)?(us|usa|u\.s\.|united states|north america|anywhere)|us[- ]remote|usa[- ]remote|remote[- ]us|fully remote|100% remote|work from anywhere)\b/i;
+
+const NON_US_TOKENS = /\b(united kingdom|uk only|england|scotland|wales|ireland|dublin|london|manchester|edinburgh|glasgow|belfast|germany|berlin|munich|hamburg|frankfurt|cologne|france|paris|lyon|marseille|spain|madrid|barcelona|valencia|italy|rome|milan|turin|netherlands|amsterdam|rotterdam|utrecht|belgium|brussels|antwerp|luxembourg|switzerland|zurich|geneva|basel|sweden|stockholm|gothenburg|norway|oslo|denmark|copenhagen|finland|helsinki|iceland|reykjavik|poland|warsaw|krakow|portugal|lisbon|porto|austria|vienna|czech republic|czechia|prague|hungary|budapest|romania|bucharest|bulgaria|sofia|greece|athens|croatia|zagreb|serbia|belgrade|slovakia|bratislava|slovenia|ljubljana|estonia|tallinn|latvia|riga|lithuania|vilnius|turkey|istanbul|ankara|russia|moscow|st petersburg|saint petersburg|ukraine|kyiv|kiev|belarus|minsk|israel|tel aviv|jerusalem|haifa|uae|dubai|abu dhabi|saudi arabia|riyadh|qatar|doha|kuwait|bahrain|oman|egypt|cairo|morocco|casablanca|south africa|johannesburg|cape town|nigeria|lagos|abuja|kenya|nairobi|ghana|accra|ethiopia|addis ababa|australia|sydney|melbourne|brisbane|perth|adelaide|canberra|new zealand|auckland|wellington|japan|tokyo|osaka|kyoto|china|beijing|shanghai|shenzhen|guangzhou|hong kong|singapore|south korea|seoul|busan|taiwan|taipei|india|bangalore|bengaluru|mumbai|new delhi|delhi|hyderabad|chennai|kolkata|pune|gurgaon|gurugram|noida|ahmedabad|jaipur|pakistan|karachi|islamabad|lahore|bangladesh|dhaka|sri lanka|colombo|philippines|manila|cebu|vietnam|hanoi|ho chi minh|thailand|bangkok|indonesia|jakarta|bali|malaysia|kuala lumpur|brazil|brasil|sao paulo|são paulo|rio de janeiro|brasilia|belo horizonte|mexico|mexico city|cdmx|guadalajara|monterrey|argentina|buenos aires|chile|santiago|colombia|bogota|bogotá|medellin|medellín|peru|lima|uruguay|montevideo|venezuela|caracas|ecuador|quito|costa rica|san jose costa rica|panama|panama city|dominican republic|cuba|havana|canada|toronto|vancouver|montreal|montréal|ottawa|calgary|edmonton|winnipeg|halifax|quebec|québec|ontario|british columbia|alberta|emea|apac|latam|emea\/apac|europe only|eu only|eu\/uk|uk\/eu|emea only|apac only|latam only)\b/i;
+
+export function isLocationEligible(
+  remoteType: string | null,
+  location: string | null,
+  description: string | null = null
+): boolean {
   if (remoteType && remoteType.toLowerCase() === 'remote') return true;
-  if (!location) return false;
-  return ELIGIBLE_PATTERNS.some((re) => re.test(location));
+
+  const loc = location || '';
+  if (US_LOCATION_TOKENS.test(loc)) return true;
+  if (REMOTE_TOKENS.test(loc)) return true;
+
+  if (description && REMOTE_IN_DESCRIPTION.test(description)) return true;
+
+  // No positive signal. Only drop when location clearly names a non-US locale.
+  if (loc && NON_US_TOKENS.test(loc)) return false;
+
+  // Empty or ambiguous — show it; user can Skip/Interested.
+  return true;
 }

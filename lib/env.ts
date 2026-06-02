@@ -11,6 +11,9 @@ export const env = {
   adzunaKey: process.env.ADZUNA_APP_KEY || '',
   adzunaCountry: process.env.ADZUNA_COUNTRY || 'us',
   apifyToken: process.env.APIFY_API_TOKEN || '',
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+  googleRefreshToken: process.env.GOOGLE_REFRESH_TOKEN || '',
 };
 
 export function configStatus() {
@@ -21,5 +24,6 @@ export function configStatus() {
     openai: !!env.openaiKey,
     ai: !!(env.anthropicKey || env.openaiKey),
     adzuna: !!(env.adzunaId && env.adzunaKey),
+    google: !!(env.googleClientId && env.googleClientSecret && env.googleRefreshToken),
   };
 }

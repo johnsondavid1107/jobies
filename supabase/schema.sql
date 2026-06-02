@@ -11,7 +11,7 @@ create table if not exists profiles (
 
 create table if not exists resumes (
   id uuid primary key default gen_random_uuid(),
-  type text not null check (type in ('master','generated')),
+  type text not null check (type in ('master','generated','template')),
   filename text not null,
   storage_path text not null,
   parsed_text text,
@@ -98,6 +98,9 @@ create table if not exists resume_versions (
   keywords_emphasized_json jsonb,
   used_to_apply boolean not null default false,
   notes text,
+  google_drive_file_id text,
+  parent_version_id uuid references resume_versions(id) on delete set null,
+  last_synced_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -114,6 +117,16 @@ create table if not exists ai_outputs (
   type text,
   created_at timestamptz not null default now()
 );
+
+-- App-level key/value settings. Holds the Google OAuth refresh token, so RLS is
+-- ON with NO policies: only the service-role key (the server) can read/write it;
+-- the public anon key is blocked from ever reading the token.
+create table if not exists app_settings (
+  key text primary key,
+  value jsonb not null,
+  updated_at timestamptz not null default now()
+);
+alter table app_settings enable row level security;
 
 create table if not exists job_sources (
   id uuid primary key default gen_random_uuid(),

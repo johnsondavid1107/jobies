@@ -1,6 +1,7 @@
 import mammoth from 'mammoth';
 import { aiComplete, extractJson } from '@/lib/ai/provider';
 import { PARSE_RESUME_SYSTEM, buildParsePrompt, ResumeSections } from '@/lib/ai/prompts';
+import { normalizeResumeSections } from '@/lib/resume/normalize';
 
 export async function parseDocxBuffer(buf: Buffer): Promise<string> {
   const res = await mammoth.extractRawText({ buffer: buf });
@@ -30,7 +31,9 @@ export async function structureResume(text: string): Promise<ResumeSections> {
     maxTokens: 3000,
   });
   try {
-    return extractJson<ResumeSections>(raw);
+    // Normalize defensively — coerce JSON Resume keys to ResumeSections if the
+    // model drifts, so what we store is always render-ready.
+    return normalizeResumeSections(extractJson<ResumeSections>(raw));
   } catch {
     // Fall back to a minimal one-section resume
     return { summary: text.slice(0, 1500) };

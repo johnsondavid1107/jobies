@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, type PointerEvent } from 'react';
 import {
   DndContext,
   DragEndEvent,
@@ -69,6 +69,16 @@ export function KanbanBoard({ initial }: { initial: App[] }) {
     });
   }
 
+  // Remove a card from the pipeline (e.g. showed interest but never applied).
+  // Optimistic: drop it locally, then DELETE. The job's swipe row is untouched
+  // server-side so the posting stays out of the deck. Re-add on failure.
+  async function onDelete(id: string) {
+    const prev = apps;
+    setApps((cur) => cur.filter((a) => a.id !== id));
+    const res = await fetch(`/api/applications/${id}`, { method: 'DELETE' });
+    if (!res.ok) setApps(prev);
+  }
+
   const active = apps.find((a) => a.id === activeId);
 
   return (
@@ -80,7 +90,13 @@ export function KanbanBoard({ initial }: { initial: App[] }) {
     >
       <div className="flex gap-3 overflow-x-auto pb-4">
         {STAGES.map((s) => (
-          <Column key={s.id} stage={s.id} label={s.label} apps={apps.filter((a) => a.stage === s.id)} />
+          <Column
+            key={s.id}
+            stage={s.id}
+            label={s.label}
+            apps={apps.filter((a) => a.stage === s.id)}
+            onDelete={onDelete}
+          />
         ))}
       </div>
       <DragOverlay dropAnimation={{ duration: 220, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' }}>
@@ -90,7 +106,17 @@ export function KanbanBoard({ initial }: { initial: App[] }) {
   );
 }
 
-function Column({ stage, label, apps }: { stage: Stage; label: string; apps: App[] }) {
+function Column({
+  stage,
+  label,
+  apps,
+  onDelete,
+}: {
+  stage: Stage;
+  label: string;
+  apps: App[];
+  onDelete: (id: string) => void;
+}) {
   const { isOver, setNodeRef } = useDroppable({ id: stage });
   const tone = STAGE_TONES[stage];
   const styles = TONE_STYLES[tone];
@@ -110,13 +136,13 @@ function Column({ stage, label, apps }: { stage: Stage; label: string; apps: App
         <span className={'text-xs font-medium tabular-nums ' + styles.count}>{apps.length}</span>
       </div>
       <div className="space-y-2">
-        {apps.map((a) => <DraggableCard key={a.id} app={a} />)}
+        {apps.map((a) => <DraggableCard key={a.id} app={a} onDelete={onDelete} />)}
       </div>
     </div>
   );
 }
 
-function DraggableCard({ app }: { app: App }) {
+function DraggableCard({ app, onDelete }: { app: App; onDelete: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: app.id });
   return (
     <div
@@ -125,30 +151,70 @@ function DraggableCard({ app }: { app: App }) {
       {...listeners}
       className={'cursor-grab touch-none' + (isDragging ? ' opacity-30' : '')}
     >
-      <Card app={app} />
+      <Card app={app} onDelete={onDelete} />
     </div>
   );
 }
 
-function Card({ app, dragging }: { app: App; dragging?: boolean }) {
+function Card({ app, dragging, onDelete }: { app: App; dragging?: boolean; onDelete?: (id: string) => void }) {
+  const [confirm, setConfirm] = useState(false);
   const score = app.match_score != null ? Math.round(app.match_score * 100) : null;
   const scoreColor =
     score == null ? '' : score >= 75 ? 'bg-ok/10 text-ok' : score >= 55 ? 'bg-accent/10 text-accent' : 'bg-ink/[0.06] text-ink/60';
+  // Buttons live inside a draggable wrapper — stop pointer events from reaching
+  // the drag sensor so a click never starts a drag.
+  const stop = (e: PointerEvent) => e.stopPropagation();
   return (
     <div
       className={
-        'card p-3 text-sm transition-shadow duration-200 ' +
+        'card relative p-3 text-sm transition-shadow duration-200 ' +
         (dragging ? 'shadow-card-lift rotate-[1.5deg]' : 'hover:shadow-card-lift')
       }
       style={{ transitionTimingFunction: 'var(--ease-out)' }}
     >
+      {onDelete && !dragging && !confirm && (
+        <button
+          type="button"
+          aria-label="Remove from pipeline"
+          title="Remove from pipeline"
+          onPointerDown={stop}
+          onClick={(e) => { e.stopPropagation(); setConfirm(true); }}
+          className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-md text-ink/30 transition-colors duration-150 hover:bg-bad/10 hover:text-bad focus-visible:bg-bad/10 focus-visible:text-bad"
+        >
+          <span className="text-[13px] leading-none">×</span>
+        </button>
+      )}
+      {confirm && (
+        <div
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-[inherit] bg-paper/90 p-2 text-center backdrop-blur-sm"
+          onPointerDown={stop}
+        >
+          <p className="text-xs font-medium text-ink/80">Remove this card?</p>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setConfirm(false); }}
+              className="rounded-md bg-ink/[0.06] px-2 py-1 text-[11px] font-medium text-ink/70 hover:bg-ink/10"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDelete?.(app.id); }}
+              className="rounded-md bg-bad/10 px-2 py-1 text-[11px] font-medium text-bad hover:bg-bad/15"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate font-medium leading-snug">{app.title || '(no title)'}</p>
           <p className="mt-0.5 truncate text-xs text-ink/55">{app.company || ''}</p>
         </div>
         {score != null && (
-          <span className={'rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ' + scoreColor}>
+          <span className={'mr-5 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ' + scoreColor}>
             {score}%
           </span>
         )}

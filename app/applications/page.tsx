@@ -1,8 +1,10 @@
 import { KanbanBoard } from '@/components/KanbanBoard';
 import { GenerateResumeButton } from '@/components/GenerateResumeButton';
+import { ResumeChoice } from '@/components/ResumeChoice';
 import { listApplications } from '@/lib/db/applications';
 import { hasSupabase } from '@/lib/supabase/server';
 import { STAGES } from '@/lib/db/types';
+import { docUrl } from '@/lib/google/drive';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +38,7 @@ export default async function ApplicationsPage() {
               <th className="px-4 py-2.5 text-right font-medium">Match</th>
               <th className="px-4 py-2.5 font-medium">Source</th>
               <th className="px-4 py-2.5 font-medium">Applied</th>
+              <th className="px-4 py-2.5 font-medium">Résumé</th>
               <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
@@ -52,6 +55,33 @@ export default async function ApplicationsPage() {
                 <td className="px-4 py-2.5 tabular-nums text-ink/75">
                   {a.date_applied ? new Date(a.date_applied).toLocaleDateString() : '—'}
                 </td>
+                <td className="px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <ResumeChoice appId={a.id} resumeVersionId={a.resume_version_id ?? null} />
+                    {a.resume_versions?.pdf_storage_path && (
+                      <a
+                        className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
+                        href={`/api/resume-versions/${a.resume_versions.id}/download?format=pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Download the tailored résumé PDF"
+                      >
+                        PDF ↓
+                      </a>
+                    )}
+                    {a.resume_versions?.google_drive_file_id && (
+                      <a
+                        className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
+                        href={docUrl(a.resume_versions.google_drive_file_id)}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Open the tailored résumé in Google Docs"
+                      >
+                        Docs ↗
+                      </a>
+                    )}
+                  </div>
+                </td>
                 <td className="px-4 py-2.5 text-right space-x-3">
                   {a.url && (
                     <a className="text-accent hover:underline" href={a.url} target="_blank" rel="noreferrer">
@@ -65,7 +95,7 @@ export default async function ApplicationsPage() {
               </tr>
             ))}
             {apps.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-ink/50">No applications yet.</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-ink/50">No applications yet.</td></tr>
             )}
           </tbody>
         </table>

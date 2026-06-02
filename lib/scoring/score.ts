@@ -111,6 +111,70 @@ export async function scoreAndPersist(job: any) {
   return data;
 }
 
+// Score arbitrary résumé text against a job WITHOUT persisting to job_scores.
+// Used by the tailor flow to evaluate the enhanced résumé separately from the
+// master-résumé score that powers the swipe queue.
+export async function scoreWithResume(resumeText: string, job: any) {
+  const sb = supabaseAdmin();
+  const profile = await getProfile();
+
+  const { data: recentSwipes } = await sb
+    .from('swipes')
+    .select('action, job_id, jobs:job_id(title, company), job_scores:job_id(final_score)')
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  const swipesForPrompt = (recentSwipes || []).map((s: any) => ({
+    title: s.jobs?.title || '',
+    company: s.jobs?.company || null,
+    action: s.action,
+    final_score: s.job_scores?.final_score ?? null,
+  }));
+
+  const raw = await aiComplete({
+    system: SCORE_SYSTEM,
+    prompt: buildScorePrompt({
+      resumeText,
+      job: {
+        title: job.title,
+        company: job.company,
+        description: job.description,
+        location: job.location,
+        remote_type: job.remote_type,
+        salary_min: job.salary_min,
+        salary_max: job.salary_max,
+      },
+      preferences: profile.preferences_json,
+      recentSwipes: swipesForPrompt,
+    }),
+    json: true,
+    maxTokens: 1500,
+    jobId: job.id,
+    type: 'score',
+  });
+
+  let parsed: ScoreOutput;
+  try {
+    parsed = extractJson<ScoreOutput>(raw);
+  } catch {
+    parsed = {
+      resume_match_score: 0,
+      title_match_score: 0,
+      industry_match_score: 0,
+      seniority_match_score: 0,
+      salary_match_score: 0,
+      location_match_score: 0,
+      swipe_learning_score: 0,
+      quality_score: 0.5,
+      ai_explanation: 'AI scoring failed; defaulted to zeros.',
+      focus_suggestions: [],
+    };
+  }
+
+  const final_score = computeFinalScore(parsed, profile.scoring_weights_json);
+  return { final_score, subscores: parsed };
+}
+
 export async function recalculateAllFinalScores() {
   const sb = supabaseAdmin();
   const profile = await getProfile();

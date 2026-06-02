@@ -2,12 +2,13 @@
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-export function ResumeUploader() {
+export function ResumeUploader({ type = 'master' }: { type?: 'master' | 'template' }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const isTemplate = type === 'template';
 
   const upload = useCallback(async (f: File) => {
     setBusy(true);
@@ -16,6 +17,7 @@ export function ResumeUploader() {
     try {
       const fd = new FormData();
       fd.append('file', f);
+      fd.append('type', type);
       const res = await fetch('/api/resume/upload', { method: 'POST', body: fd });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -28,7 +30,7 @@ export function ResumeUploader() {
     } finally {
       setBusy(false);
     }
-  }, [router]);
+  }, [router, type]);
 
   function onChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -78,15 +80,18 @@ export function ResumeUploader() {
           {busy ? 'Uploading…' :
            done ? `Uploaded ${done}` :
            err ? 'Upload failed' :
-           dragOver ? 'Drop to upload' : 'Drop a resume or click to browse'}
+           dragOver ? 'Drop to upload' :
+           isTemplate ? 'Drop a .docx template or click to browse' : 'Drop a resume or click to browse'}
         </div>
         <div className="mt-1 text-xs text-ink/55">
-          {err || 'DOCX preferred · PDF, TXT, MD also supported'}
+          {err || (isTemplate
+            ? '.docx only · your design + {placeholder} tags'
+            : 'DOCX preferred · PDF, TXT, MD also supported')}
         </div>
       </div>
       <input
         type="file"
-        accept=".docx,.pdf,.txt,.md"
+        accept={isTemplate ? '.docx' : '.docx,.pdf,.txt,.md'}
         className="hidden"
         onChange={onChange}
         disabled={busy}

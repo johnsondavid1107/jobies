@@ -15,6 +15,9 @@ export interface ResumeVersionRow {
   created_at: string;
   job_id: string | null;
   application_id: string | null;
+  google_drive_file_id: string | null;
+  parent_version_id: string | null;
+  last_synced_at: string | null;
   docx_url?: string | null;
   pdf_url?: string | null;
 }

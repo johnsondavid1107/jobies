@@ -89,12 +89,37 @@ export interface ResumeSections {
 
 export const PARSE_RESUME_SYSTEM = `You parse a resume into structured JSON. Use only content present.
 Never invent companies, titles, dates, metrics, tools, or certifications.
-Output JSON matching the ResumeSections schema. Omit fields you cannot extract.`;
+
+Output JSON using EXACTLY these keys (omit a key only when the resume lacks it).
+Do NOT use the JSON Resume schema — no "basics", "work", "position", "highlights",
+"institution", "studyType", or "area". Use the keys below verbatim:
+
+{
+  "header": { "name": string, "email": string, "phone": string, "location": string, "links": string[] },
+  "summary": string,
+  "experience": [{ "company": string, "title": string, "location": string, "start": string, "end": string, "bullets": string[] }],
+  "education": [{ "school": string, "degree": string, "start": string, "end": string, "notes": string }],
+  "skills": string[],
+  "projects": [{ "name": string, "description": string, "bullets": string[] }],
+  "certifications": string[],
+  "other": [{ "heading": string, "items": string[] }]
+}`;
+
+const RESUME_SCHEMA = {
+  header: { name: 'string', email: 'string', phone: 'string', location: 'string', links: 'string[]' },
+  summary: 'string',
+  experience: [{ company: 'string', title: 'string', location: 'string', start: 'string', end: 'string', bullets: 'string[]' }],
+  education: [{ school: 'string', degree: 'string', start: 'string', end: 'string', notes: 'string' }],
+  skills: 'string[]',
+  projects: [{ name: 'string', description: 'string', bullets: 'string[]' }],
+  certifications: 'string[]',
+  other: [{ heading: 'string', items: 'string[]' }],
+};
 
 export function buildParsePrompt(resumeText: string) {
   return JSON.stringify({
     resume_text: resumeText.slice(0, 20000),
-    schema: 'ResumeSections',
+    schema: RESUME_SCHEMA,
   });
 }
 
@@ -107,8 +132,18 @@ HARD GUARDRAILS — never violate:
 - Use terminology from the job description ONLY where it accurately maps to existing experience.
 - Keep the resume human-readable, not keyword-stuffed.
 
+COMPLETENESS — the tailored resume MUST be as complete as the master:
+- Include EVERY experience entry from the master resume. Never drop, merge, or omit a job — even if a role seems unrelated to this job, keep it and reframe its bullets.
+- Include EVERY education entry from the master.
+- Preserve all sections the master has (summary, experience, education, skills, projects, certifications, other). Never return empty arrays for a section the master populated.
+- Keep roughly the same number of bullets per role as the master (rephrase them — do not delete them).
+
+LENGTH — produce a complete one-page resume:
+- Target approximately 450–550 words across the whole resume.
+- The summary should be 2–4 sentences. Each experience entry should keep its bullets (typically 3–6). Do not pad, and do not trim the resume down to a stub.
+
 Output JSON with fields:
-  resume: ResumeSections (the tailored version, same shape as input)
+  resume: ResumeSections (the tailored version, same shape as input — with every section/entry the master had)
   keywords_emphasized: string[]
   match_score_after: number 0..1 (your estimate)
   changes_summary: string[] (3-6 bullets describing what you changed)`;

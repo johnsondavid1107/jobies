@@ -146,3 +146,5 @@ vite.config.ts.timestamp-*
 # addititonal files
 handoff.md
 .claude
+# Playwright MCP page snapshots — debug artifacts, contain PII + signed URLs
+.playwright-mcp/
